@@ -38,6 +38,31 @@ public class receiveTest {
                 System.out.println("Consumer cancelled: " + consumerTag);
             });
 
+            channel.basicConsume(SPEED_SENSOR_QUEUE, (consumerTag, delivery) -> {
+                String message = new String(delivery.getBody(), "UTF-8");
+                System.out.println(message);
+            }, consumerTag -> {
+                // handle cancellation
+                System.out.println("Consumer cancelled: " + consumerTag);
+            });
+
+            channel.basicConsume(CABIN_SENSOR_QUEUE, (consumerTag, delivery) -> {
+                String message = new String(delivery.getBody(), "UTF-8");
+                System.out.println(message);
+            }, consumerTag -> {
+                // handle cancellation
+                System.out.println("Consumer cancelled: " + consumerTag);
+            });
+
+            channel.basicConsume(WEATHER_SENSOR_QUEUE, (consumerTag, delivery) -> {
+                String message = new String(delivery.getBody(), "UTF-8");
+                System.out.println(message);
+            }, consumerTag -> {
+                // handle cancellation
+                System.out.println("Consumer cancelled: " + consumerTag);
+            });
+
+
             System.out.println("Consumer started");
 
         } catch (Exception e) {

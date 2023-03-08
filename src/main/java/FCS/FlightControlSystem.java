@@ -3,6 +3,7 @@ package FCS;
 import com.rabbitmq.client.*;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.util.Random;
 import java.util.Timer;
@@ -62,7 +63,7 @@ public class FlightControlSystem {
         Consumer altitudeConsumer = new DefaultConsumer(altitudeChannel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                String SensorData = new String(body, "UTF-8");
+                String SensorData = new String(body, StandardCharsets.UTF_8);
 //
                 // Parse the message and extract the altitude value
                 if (SensorData.contains("Altitude Sensor")) {
@@ -104,7 +105,7 @@ public class FlightControlSystem {
         Consumer cabinConsumer = new DefaultConsumer(cabinChannel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                String SensorData = new String(body, "UTF-8");
+                String SensorData = new String(body, StandardCharsets.UTF_8);
                 if (SensorData.contains("Cabin Sensor")) {
                     String temperatureStr = SensorData.split("\n")[1].split(" ")[1];
                     double temperature = Double.parseDouble(temperatureStr);
@@ -143,11 +144,17 @@ public class FlightControlSystem {
         Consumer weatherConsumer = new DefaultConsumer(weatherChannel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                String SensorData = new String(body, "UTF-8");
+                String SensorData = new String(body, StandardCharsets.UTF_8);
+                if (SensorData.contains("Light Rainy") || SensorData.contains("Heavy Rainy")) {
+                    System.out.println("WARNING: Raining now!");
+                    String wiper = "COMMAND: Turn on the wipers...";
+                    channel.basicPublish("", FlightControlSystem.LANDING_GEAR_QUEUE_NAME, null, wiper.getBytes());
+                    System.out.println(wiper);
+                }
                 if (SensorData.contains("Weather Sensor")) {
                     String visibilityStr = SensorData.split("\n")[6].split(" ")[1];
                     double visibility = Double.parseDouble(visibilityStr);
-                    if(visibility < 1) {
+                    if (visibility < 1) {
                         System.out.println("WARNING: Visibility is very low.");
                         System.out.println("WARNING: Landing is REQUIRE! Reduce altitude!");
                         String engineMessage = "COMMAND: Decreasing Engine Power...";
@@ -162,7 +169,7 @@ public class FlightControlSystem {
                         System.out.println(landingGear);
                         System.out.println("MESSAGE: Prepare Landing...");
                         System.out.println("MESSAGE: Safe Landing and Arrival!");
-                    }else{
+                    } else {
                         System.out.println("MESSAGE: Visibility is clear.");
 
                     }
@@ -213,7 +220,7 @@ class SensorDataUpdater extends TimerTask {
             String randomString = "";
             Random random = new Random();
             for (int i = 0; i < 3; i++) {
-                char character = (char)(random.nextInt(26) + 'A'); // generate a random uppercase letter
+                char character = (char) (random.nextInt(26) + 'A'); // generate a random uppercase letter
                 randomString += character;
             }
             // Flight number
@@ -423,9 +430,9 @@ class SensorDataUpdater extends TimerTask {
         //visibility base on condition
         double visibility = 0;
 
-        if ( condition.equals("Heavy Foggy") || condition.equals("Heavy Rainy") || condition.equals("Snowy")) {
+        if (condition.equals("Heavy Foggy") || condition.equals("Heavy Rainy") ) {
             visibility = new Random().nextDouble(0, 1);
-        } else if (condition.equals("Stormy") || condition.equals("Light Rainy") || condition.equals("Cloudy")) {
+        } else if (condition.equals("Stormy") || condition.equals("Light Rainy") || condition.equals("Cloudy") || condition.equals("Snowy")) {
             visibility = new Random().nextDouble(3, 7);
         } else if (condition.equals("Sunny")) {
             visibility = new Random().nextDouble(0, 1);

@@ -1,6 +1,7 @@
 package FCS;
 
 import com.rabbitmq.client.*;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
@@ -23,113 +24,130 @@ public class FlightControlSystem {
     private final static String WIPER_QUEUE_NAME = "Wiper_Actuator";
 
 
-
     public static void main(String[] args) throws IOException, TimeoutException {
         // create RabbitMQ connection and channel
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("localhost");
         Connection connection = connectionFactory.newConnection();
         Channel channel = connection.createChannel();
-        try {
-            // set up and declare channel
-            // sensory system
-            channel.queueDeclare(ALTITUDE_SENSOR_QUEUE, false, false, false, null);
-            channel.queueDeclare(SPEED_SENSOR_QUEUE, false, false, false, null);
-            channel.queueDeclare(CABIN_SENSOR_QUEUE, false, false, false, null);
-            channel.queueDeclare(WEATHER_SENSOR_QUEUE, false, false, false, null);
-            // actuator system
-            channel.queueDeclare(ENGINE_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(WING_FLAPS_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(TAIL_FLAPS_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(LANDING_GEAR_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(OXYGEN_MASKS_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(CABIN_TEMPERATURE_QUEUE_NAME, false, false, false, null);
-            channel.queueDeclare(WIPER_QUEUE_NAME, false, false, false, null);
+        Channel altitudeChannel = connection.createChannel();
+        Channel cabinChannel = connection.createChannel();
+        // set up and declare channel
+        // sensory system
+        altitudeChannel.queueDeclare(ALTITUDE_SENSOR_QUEUE, false, false, false, null);
+        channel.queueDeclare(SPEED_SENSOR_QUEUE, false, false, false, null);
+        cabinChannel.queueDeclare(CABIN_SENSOR_QUEUE, false, false, false, null);
+        channel.queueDeclare(WEATHER_SENSOR_QUEUE, false, false, false, null);
+        // actuator system
+        channel.queueDeclare(ENGINE_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(WING_FLAPS_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(TAIL_FLAPS_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(LANDING_GEAR_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(OXYGEN_MASKS_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(CABIN_TEMPERATURE_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(WIPER_QUEUE_NAME, false, false, false, null);
 
 
-            // heading
-            System.out.println("--------------------------------");
-            System.out.println("     Flight Control System");
-            System.out.println("--------------------------------\n");
+        // heading
+        System.out.println("--------------------------------");
+        System.out.println("     Flight Control System");
+        System.out.println("--------------------------------\n");
 
 
-            // update data every 5 second
-            Timer timer = new Timer();
-            timer.schedule(new SensorDataUpdater(channel), 0, 5000);
+        // update data every 5 second
+        Timer timer = new Timer();
+        timer.schedule(new SensorDataUpdater(channel), 0, 5000);
 
-            Consumer Consumer = new DefaultConsumer(channel) {
-                @Override
-                public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    String SensorData = new String(body,"UTF-8");
+        Consumer Consumer = new DefaultConsumer(altitudeChannel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                String SensorData = new String(body, StandardCharsets.UTF_8);
 //
-                    // Parse the message and extract the altitude value
-                    if (SensorData.contains("Altitude Sensor")) {
-                        String altitudeStr = SensorData.split("\n")[1].split(" ")[1];
-                        int altitude = Integer.parseInt(altitudeStr);
-                        System.out.println(SensorData);
-                        if (altitude > 40000) {
-                            // Activate the descent actuator
-                            System.out.println("WARNING: Altitude is too high. Reduce altitude immediately!\n");
-                            String engineMessage = "Decreasing Engine Power ...";
-                            channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
-                            System.out.println(engineMessage);
+                // Parse the message and extract the altitude value
+                if (SensorData.contains("Altitude Sensor")) {
+                    String altitudeStr = SensorData.split("\n")[1].split(" ")[1];
+                    int altitude = Integer.parseInt(altitudeStr);
+                    if (altitude > 40000) {
+                        // Activate the descent actuator
+                        System.out.println("WARNING: Altitude is too high. Reduce altitude immediately!");
+                        String engineMessage = "Decreasing Engine Power ...";
+                        channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
+                        System.out.println(engineMessage);
 
-                            String wingFlaps = "Increasing drag and reducing lift of Wing Flaps...\n";
-                            channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
-                            System.out.println(wingFlaps);
+                        String wingFlaps = "Increasing drag and reducing lift of Wing Flaps...\n";
+                        channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
+                        System.out.println(wingFlaps);
 
 
-                        } else if (altitude < 30000) {
-                            System.out.println("WARNING: Altitude is too low. Increase altitude immediately!\n");
-                            String engineMessage = "Increasing Engine Power ...";
-                            channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
-                            System.out.println(engineMessage);
+                    } else if (altitude < 30000) {
+                        System.out.println("WARNING: Altitude is too low. Increase altitude immediately!");
+                        String engineMessage = "COMMAND: Increasing Engine Power ...";
+                        channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
+                        System.out.println(engineMessage);
 
-                            String wingFlaps = "Reducing drag and increasing lift of Wing Flaps ...";
-                            channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
-                            System.out.println(wingFlaps);
+                        String wingFlaps = "COMMAND: Reducing drag and increasing lift of Wing Flaps ...";
+                        channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
+                        System.out.println(wingFlaps);
 
-                            String tailFlaps = "Adjusting Tail Flaps to pitch attitude ... \n";
-                            channel.basicPublish("", FlightControlSystem.TAIL_FLAPS_QUEUE_NAME, null, tailFlaps.getBytes());
-                            System.out.println(tailFlaps);
-                        } else {
-                            System.out.println("Altitude is safe. No action required.\n");
-                        }
+                        String tailFlaps = "COMMAND: Adjusting Tail Flaps to pitch attitude ... \n";
+                        channel.basicPublish("", FlightControlSystem.TAIL_FLAPS_QUEUE_NAME, null, tailFlaps.getBytes());
+                        System.out.println(tailFlaps);
+                    } else {
+                        System.out.println("Altitude is safe. No action required.\n");
                     }
-
-                    if (SensorData.contains("Cabin Sensor")) {
-                        // get pressure data
-                        String pressureStr = SensorData.split("\n")[2].split(" ")[1];
-                        double pressure = Double.parseDouble(pressureStr);
-                        System.out.println("Pressure:");
-                    }else{
-                        System.out.println("No record");
-
-                    }
-
-                    if (SensorData.contains("ft")) {
-                        System.out.println("record");
-                    }else {
-                        System.out.println("No record");
-                    }
-
-
                 }
-            };
+            }
+        };
 
 
-            channel.basicConsume(FlightControlSystem.ALTITUDE_SENSOR_QUEUE, true, Consumer);
+        Consumer cabinConsumer = new DefaultConsumer(cabinChannel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                String SensorData = new String(body, StandardCharsets.UTF_8);
+                if (SensorData.contains("Cabin Sensor")) {
+                    String temperatureStr = SensorData.split("\n")[1].split(" ")[1];
+                    double temperature = Double.parseDouble(temperatureStr);
+                    if (temperature > 23) {
+                        System.out.println("WARNING: Cabin Temperature is too high. Turn on air conditioning!");
+                        // send actuator data to turn on the air conditioning
+                        String temperatureActuator = "COMMAND: Turn on Air Conditioning ...";
+                        channel.basicPublish("", FlightControlSystem.CABIN_TEMPERATURE_QUEUE_NAME, null, temperatureActuator.getBytes());
+                        System.out.println(temperatureActuator);
+                    } else if (temperature < 20) {
+                        System.out.println("WARNING: Cabin Temperature is too low. Turn off air conditioning!");
+                        // send actuator data to turn off the air conditioning
+                        String temperatureActuator = "COMMAND: Turn off Air Conditioning ...";
+                        channel.basicPublish("", FlightControlSystem.CABIN_TEMPERATURE_QUEUE_NAME, null, temperatureActuator.getBytes());
+                        System.out.println(temperatureActuator);
+                    } else {
+                        System.out.println("Normal Temperature. No action required\n");
+                    }
+                }
+                if (SensorData.contains("Cabin Sensor")) {
+                    // get pressure data
+                    String pressureStr = SensorData.split("\n")[2].split(" ")[1];
+                    double pressure = Double.parseDouble(pressureStr);
+                    if (pressure <= 3) {
+                        System.out.println("WARNING: Sudden Loss Cabin Pressure and Oxygen Level is too low. Oxygen Mask is REQUIRE!");
+                        String oxygenMask = "COMMAND: Drop down oxygen masks to all passengers...";
+                        channel.basicPublish("", FlightControlSystem.OXYGEN_MASKS_QUEUE_NAME, null, oxygenMask.getBytes());
+                        System.out.println(oxygenMask);
+                    } else {
+                        System.out.println("Pressure and Oxygen at normal level. No action required\n");
+                    }
+                }
+            }
+        };
 
+        try {
+            altitudeChannel.basicConsume(FlightControlSystem.ALTITUDE_SENSOR_QUEUE, true, Consumer);
+            cabinChannel.basicConsume(FlightControlSystem.CABIN_SENSOR_QUEUE, true, cabinConsumer);
+        } catch (Exception e) {
 
-        }catch (IOException e) {
-            e.printStackTrace();
         }
-
     }
 
 }
-
-
 
 
 class SensorDataUpdater extends TimerTask {
@@ -331,7 +349,7 @@ class SensorDataUpdater extends TimerTask {
         double visibility = 0;
         if (condition.equals("Stormy") || condition.equals("Heavy Foggy") || condition.equals("Heavy Rainy") || condition.equals("Snowy")) {
             visibility = new Random().nextDouble(0, 3);
-        } else if (condition.equals("Light Rainy") || condition.equals("Cloudy") ) {
+        } else if (condition.equals("Light Rainy") || condition.equals("Cloudy")) {
             visibility = new Random().nextDouble(3, 7);
         } else if (condition.equals("Sunny")) {
             visibility = new Random().nextDouble(7, 10);

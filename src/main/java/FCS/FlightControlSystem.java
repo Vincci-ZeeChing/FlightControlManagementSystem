@@ -14,13 +14,13 @@ public class FlightControlSystem {
     public final static String SPEED_SENSOR_QUEUE = "Speed_Sensor";
     public final static String CABIN_SENSOR_QUEUE = "Cabin_Sensor";
     public final static String WEATHER_SENSOR_QUEUE = "Weather_Sensor";
-    private final static String ENGINE_QUEUE_NAME = "Engine_Actuator";
-    private final static String WING_FLAPS_QUEUE_NAME = "WingFlaps_Actuator";
-    private final static String TAIL_FLAPS_QUEUE_NAME = "TailFlaps_Actuator";
-    private final static String LANDING_GEAR_QUEUE_NAME = "LandingGear_Actuator";
-    private final static String OXYGEN_MASKS_QUEUE_NAME = "Oxygen_Masks_Actuator";
-    private final static String CABIN_TEMPERATURE_QUEUE_NAME = "Cabin_Temperature_Actuator";
-    private final static String WIPER_QUEUE_NAME = "Wiper_Actuator";
+    public final static String ENGINE_QUEUE_NAME = "Engine_Actuator";
+    public final static String WING_FLAPS_QUEUE_NAME = "WingFlaps_Actuator";
+    public final static String TAIL_FLAPS_QUEUE_NAME = "TailFlaps_Actuator";
+    public final static String LANDING_GEAR_QUEUE_NAME = "LandingGear_Actuator";
+    public final static String OXYGEN_MASKS_QUEUE_NAME = "Oxygen_Masks_Actuator";
+    public final static String CABIN_TEMPERATURE_QUEUE_NAME = "Cabin_Temperature_Actuator";
+    public final static String WIPER_QUEUE_NAME = "Wiper_Actuator";
 
 
     public static void main(String[] args) throws IOException, TimeoutException {
@@ -31,12 +31,14 @@ public class FlightControlSystem {
         Channel channel = connection.createChannel();
         Channel altitudeChannel = connection.createChannel();
         Channel cabinChannel = connection.createChannel();
+        Channel weatherChannel = connection.createChannel();
+
         // set up and declare channel
         // sensory system
         altitudeChannel.queueDeclare(ALTITUDE_SENSOR_QUEUE, false, false, false, null);
         channel.queueDeclare(SPEED_SENSOR_QUEUE, false, false, false, null);
         cabinChannel.queueDeclare(CABIN_SENSOR_QUEUE, false, false, false, null);
-        channel.queueDeclare(WEATHER_SENSOR_QUEUE, false, false, false, null);
+        weatherChannel.queueDeclare(WEATHER_SENSOR_QUEUE, false, false, false, null);
         // actuator system
         channel.queueDeclare(ENGINE_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(WING_FLAPS_QUEUE_NAME, false, false, false, null);
@@ -78,7 +80,7 @@ public class FlightControlSystem {
                         System.out.println(wingFlaps);
 
 
-                    } else if (altitude < 30000) {
+                    } else if (altitude < 20000) {
                         System.out.println("WARNING: Altitude is too low. Increase altitude immediately!");
                         String engineMessage = "COMMAND: Increasing Engine Power...";
                         channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
@@ -119,7 +121,7 @@ public class FlightControlSystem {
                         channel.basicPublish("", FlightControlSystem.CABIN_TEMPERATURE_QUEUE_NAME, null, temperatureActuator.getBytes());
                         System.out.println(temperatureActuator);
                     } else {
-                        System.out.println("MESSAGE: Normal Temperature. No action required");
+                        System.out.println("MESSAGE: Normal Temperature. No action required.");
                     }
                 }
                 if (SensorData.contains("Cabin Sensor")) {
@@ -138,12 +140,43 @@ public class FlightControlSystem {
             }
         };
 
+        Consumer weatherConsumer = new DefaultConsumer(weatherChannel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                String SensorData = new String(body, "UTF-8");
+                if (SensorData.contains("Weather Sensor")) {
+                    String visibilityStr = SensorData.split("\n")[6].split(" ")[1];
+                    double visibility = Double.parseDouble(visibilityStr);
+                    if(visibility < 1) {
+                        System.out.println("WARNING: Visibility is very low.");
+                        System.out.println("WARNING: Landing is REQUIRE! Reduce altitude!");
+                        String engineMessage = "COMMAND: Decreasing Engine Power...";
+                        channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
+                        System.out.println(engineMessage);
+                        String wingFlaps = "COMMAND: Increasing drag and reducing lift of Wing Flaps...";
+                        channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
+                        System.out.println(wingFlaps);
+                        System.out.println("MESSAGE: 1000 ft above the ground.");
+                        String landingGear = "COMMAND: Deploy Landing Gear...";
+                        channel.basicPublish("", FlightControlSystem.LANDING_GEAR_QUEUE_NAME, null, landingGear.getBytes());
+                        System.out.println(landingGear);
+                        System.out.println("MESSAGE: Prepare Landing...");
+                        System.out.println("MESSAGE: Safe Landing and Arrival!");
+                    }else{
+                        System.out.println("MESSAGE: Visibility is clear.");
 
+                    }
+                }
+            }
+        };
 
         try {
             altitudeChannel.basicConsume(FlightControlSystem.ALTITUDE_SENSOR_QUEUE, true, altitudeConsumer);
             cabinChannel.basicConsume(FlightControlSystem.CABIN_SENSOR_QUEUE, true, cabinConsumer);
+            weatherChannel.basicConsume(FlightControlSystem.WEATHER_SENSOR_QUEUE, true, weatherConsumer);
+
         } catch (Exception e) {
+
 
         }
 
@@ -180,12 +213,32 @@ class SensorDataUpdater extends TimerTask {
             String randomString = "";
             Random random = new Random();
             for (int i = 0; i < 3; i++) {
-                char c = (char)(random.nextInt(26) + 'A'); // generate a random uppercase letter
-                randomString += c;
+                char character = (char)(random.nextInt(26) + 'A'); // generate a random uppercase letter
+                randomString += character;
             }
-            System.out.println("------------------------");
+            // Flight number
+            System.out.println("\n------------------------");
             System.out.println("\tFlight: " + randomString + " " + flightNumber);
             System.out.println("------------------------");
+            // Ready Take off
+            System.out.println("MESSAGE: Engine start...");
+            System.out.println("MESSAGE: Ready for Take Off!");
+            String engineMessage = "COMMAND: Increasing Engine Power...";
+            channel.basicPublish("", FlightControlSystem.ENGINE_QUEUE_NAME, null, engineMessage.getBytes());
+            System.out.println(engineMessage);
+            String wingFlaps = "COMMAND: Reducing drag and increasing lift of Wing Flaps...";
+            channel.basicPublish("", FlightControlSystem.WING_FLAPS_QUEUE_NAME, null, wingFlaps.getBytes());
+            System.out.println(wingFlaps);
+            String tailFlaps = "COMMAND: Adjusting Tail Flaps to pitch attitude... ";
+            channel.basicPublish("", FlightControlSystem.TAIL_FLAPS_QUEUE_NAME, null, tailFlaps.getBytes());
+            System.out.println(tailFlaps);
+            // Successful Take Off
+            System.out.println("MESSAGE: Successful Take Off!");
+            String landingGear = "COMMAND: Retracting Landing Gear...";
+            channel.basicPublish("", FlightControlSystem.LANDING_GEAR_QUEUE_NAME, null, landingGear.getBytes());
+            System.out.println(landingGear);
+            // Display Sensor Data
+            System.out.println("MESSAGE: Display Sensor data...\n");
             channel.basicPublish("", FlightControlSystem.ALTITUDE_SENSOR_QUEUE, null, altitudeData.getBytes());
             System.out.println(altitudeData);
             channel.basicPublish("", FlightControlSystem.CABIN_SENSOR_QUEUE, null, cabinPressureData.getBytes());
@@ -202,13 +255,15 @@ class SensorDataUpdater extends TimerTask {
 
     public String getAltitude() {
         // simulate data from altitude sensor
-        int altitude = new Random().nextInt(18000, 45000); // generate a random number between 20000 and 45000
+        int altitude = new Random().nextInt(18000, 45000); // generate a random number between 18000 and 45000
         String altitudeStr = String.valueOf(altitude);
         DecimalFormat df = new DecimalFormat("#.##");
         double longitude = Double.parseDouble(df.format(Math.random() * 360 - 180));
         String longitudeStr = String.valueOf(longitude);
         double latitude = Double.parseDouble(df.format(Math.random() * 180 - 90));
         String latitudeStr = String.valueOf(latitude);
+
+        // return formatted sensor data as string
         return "\tAltitude Sensor" +
                 "\nAltitude: " + altitudeStr + " ft" +
                 "\nLongitude: " + longitudeStr + "°" +
@@ -217,7 +272,7 @@ class SensorDataUpdater extends TimerTask {
     }
 
     public String getCabinPressure() {
-        // get actual data from cabin sensors
+        // simulate data from cabin sensor
         double temperature = getCabinTemperature();
         String temperatureStr = String.format("%.2f", temperature);
         double pressure = getCabinPressureValue();
@@ -233,7 +288,6 @@ class SensorDataUpdater extends TimerTask {
                 "\n------------------------";
     }
 
-    // example methods to get actual sensor data
     private double getCabinTemperature() {
         // code to get cabin temperature from sensors
         double temperature = new Random().nextDouble(16, 26);
@@ -270,10 +324,13 @@ class SensorDataUpdater extends TimerTask {
         // calculate speed based on altitude
         int speed = 0;
         if (altitude > 40000) {
+            // altitude more than 40000, then speed between 800 and 960
             speed = (int) (new Random().nextDouble(800, 960));
         } else if (altitude < 30000) {
+            // altitude less than 30000, then speed between 650 and 800
             speed = (int) (new Random().nextDouble(650, 800));
         } else {
+            // general altitude, then speed between 700 and 900
             speed = (int) (new Random().nextDouble(700, 900));
         }
         String speedStr = String.valueOf(speed);
@@ -306,19 +363,22 @@ class SensorDataUpdater extends TimerTask {
         String windDirectionStr = String.format("%.2f", windDirection);
 
         if (altitude >= 40000) {
+            // altitude more than 40000, which is good condition
             int index = (int) (Math.random() * extremelyGoodConditions.length);
             condition = extremelyGoodConditions[index];
         } else if (altitude >= 30000) {
+            // altitude more than 30000, which is fair condition
             int index = (int) (Math.random() * fairConditions.length);
             condition = fairConditions[index];
         } else {
+            // altitude less than 30000, which is poor condition
             int index = (int) (Math.random() * poorConditions.length);
             condition = poorConditions[index];
         }
-
         double visibility = getVisibility(condition);
         String visibilityStr = String.format("%.2f", visibility);
 
+        // return formatted sensor data as string
         if (condition == null) {
             return "\tWeather Sensor" +
                     "\nCondition: Unknown" +
@@ -335,7 +395,6 @@ class SensorDataUpdater extends TimerTask {
         }
     }
 
-    // example methods to simulate weather sensor data
     private double getTemperature() {
         // generate a random temperature between -30°C and 40°C
         double temperature = new Random().nextDouble(-30, 40);
@@ -361,13 +420,16 @@ class SensorDataUpdater extends TimerTask {
     }
 
     private double getVisibility(String condition) {
+        //visibility base on condition
         double visibility = 0;
-        if (condition.equals("Stormy") || condition.equals("Heavy Foggy") || condition.equals("Heavy Rainy") || condition.equals("Snowy")) {
-            visibility = new Random().nextDouble(0, 3);
-        } else if (condition.equals("Light Rainy") || condition.equals("Cloudy")) {
+
+        if ( condition.equals("Heavy Foggy") || condition.equals("Heavy Rainy") || condition.equals("Snowy")) {
+            visibility = new Random().nextDouble(0, 1);
+        } else if (condition.equals("Stormy") || condition.equals("Light Rainy") || condition.equals("Cloudy")) {
             visibility = new Random().nextDouble(3, 7);
         } else if (condition.equals("Sunny")) {
-            visibility = new Random().nextDouble(7, 10);
+            visibility = new Random().nextDouble(0, 1);
+
         }
         return visibility;
     }

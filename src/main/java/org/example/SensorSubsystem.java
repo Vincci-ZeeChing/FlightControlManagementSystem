@@ -1,4 +1,4 @@
-package FCS;
+package org.example;
 
 
 import java.util.Timer;
@@ -22,8 +22,9 @@ public class SensorSubsystem {
         channel.queueDeclare(SENSOR_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(ACTUATOR_QUEUE_NAME, false, false, false, null);
 
+
         Timer timer = new Timer();
-        timer.schedule(new SensorDataUpdater1(channel), 0, 3000);
+        timer.schedule(new SensorDataUpdater1(channel), 0, 1000);
 
         Consumer consumer = new DefaultConsumer(channel) {
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
@@ -130,7 +131,7 @@ class SensorDataUpdater1 extends TimerTask {
 
     public String getWeatherConditions() {
         // return the weather conditions
-        String[] conditions = {"Sunny", "Cloudy", "Rainy", "Snowy"};
+        String[] conditions = {"Sunny", "Rainy", "Snowy"};
         int index = (int) (Math.random() * conditions.length);
         String condition = conditions[index];
         return condition;    }

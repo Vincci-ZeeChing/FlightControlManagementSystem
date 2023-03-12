@@ -1,4 +1,4 @@
-package FCS;
+package org.example;
 
 import com.rabbitmq.client.*;
 

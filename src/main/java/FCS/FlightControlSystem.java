@@ -32,12 +32,6 @@ public class FlightControlSystem {
         Channel weatherChannel = connection.createChannel();
 
 
-        String ALTITUDE_SENSOR_QUEUE = "Altitude_Sensor";
-        String SPEED_SENSOR_QUEUE = "Speed_Sensor";
-        String CABIN_SENSOR_QUEUE = "Cabin_Sensor";
-        String WEATHER_SENSOR_QUEUE = "Weather_Sensor";
-
-
         // set up and declare channel
         // sensory system
         altitudeChannel.queueDeclare(ALTITUDE_SENSOR_QUEUE, false, false, false, null);
